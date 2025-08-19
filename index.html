@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Image Base64 Previewer</title>
+<style>
+  :root { --bg:#0b1020; --card:#121a30; --text:#e6ecff; --muted:#9fb0d6; --accent:#4f8cff; --bad:#ff6b6b; }
+  *{box-sizing:border-box} body{margin:0;background:linear-gradient(180deg,#0b1020,#0a0f1c);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue","Noto Sans Bengali","Noto Sans",Arial,sans-serif}
+  .wrap{max-width:1100px;margin:auto;padding:20px}
+  .card{background:var(--card);border:1px solid #1c2645;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .grid{display:grid;gap:16px}
+  @media(min-width:980px){.grid{grid-template-columns:1.1fr .9fr}}
+  h1{font-size:clamp(20px,4vw,28px);margin:0 0 12px}
+  .muted{color:var(--muted);font-size:14px}
+  label{font-size:14px;color:var(--muted)}
+  textarea{width:100%;min-height:240px;background:#0c142a;color:var(--text);border:1px solid #22305a;border-radius:12px;padding:12px 14px;resize:vertical;outline:none}
+  textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,140,255,.2)}
+  select,input[type="text"]{width:100%;background:#0c142a;color:var(--text);border:1px solid #22305a;border-radius:10px;padding:10px 12px;outline:none}
+  button{background:var(--accent);color:white;border:0;border-radius:12px;padding:12px 16px;font-weight:600;cursor:pointer}
+  button.sec{background:#20335f}
+  button:disabled{opacity:.6;cursor:not-allowed}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row > * {flex:1 1 160px}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap}
+  .error{color:var(--bad);font-weight:600}
+  .previewBox{background:#0a1226;border:1px solid #22305a;border-radius:12px;display:flex;align-items:center;justify-content:center;min-height:300px;overflow:auto}
+  .previewBox img{max-width:100%;height:auto;display:block}
+  .meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;font-size:14px}
+  .pill{background:#172242;border:1px solid #22305a;color:var(--text);padding:6px 10px;border-radius:999px;display:inline-flex;gap:8px;align-items:center}
+  .k{color:#c6d6ff}
+  .v{color:#9fd1ff}
+  .footer{font-size:12px;color:#89a1d8;opacity:.9;text-align:center;margin-top:10px}
+  .hint{font-size:12px;color:#9db3e9;margin-top:4px}
+  .copy{background:transparent;border:1px dashed #335399}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Image Base64 Previewer</h1>
+    <p class="muted">আপনার তৈরি করা base64 এখানে পেস্ট করুন—তাৎক্ষণিকভাবে ছবি দেখা যাবে। পুরো <code>data:image/png;base64,</code> URL বা শুধু base64—দুটোই চলবে।</p>
+
+    <div class="grid">
+      <!-- Left: Input -->
+      <div class="card" style="padding:16px">
+        <div class="row">
+          <div>
+            <label for="mime">MIME টাইপ</label>
+            <select id="mime">
+              <option value="auto" selected>Auto detect (data URL হলে)</option>
+              <option value="image/png">image/png</option>
+              <option value="image/jpeg">image/jpeg</option>
+              <option value="image/webp">image/webp</option>
+              <option value="image/gif">image/gif</option>
+              <option value="image/svg+xml">image/svg+xml</option>
+              <option value="image/bmp">image/bmp</option>
+            </select>
+            <div class="hint">শুধু base64 দিলে এখানে সঠিক টাইপ বেছে নিন।</div>
+          </div>
+          <div>
+            <label for="filename">ফাইলনেম (ঐচ্ছিক)</label>
+            <input id="filename" type="text" placeholder="preview.png">
+            <div class="hint">ডাউনলোড করলে এই নামে সেভ হবে।</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <label for="b64">Base64 / Data URL</label>
+          <textarea id="b64" placeholder="এখানে আপনার base64 বা data URL পেস্ট করুন..."></textarea>
+          <div class="hint">ফাঁকা স্পেস/নতুন লাইন থাকলে স্বয়ংক্রিয়ভাবে ঠিক করে নেওয়া হবে।</div>
+        </div>
+
+        <div class="toolbar" style="margin-top:12px">
+          <button id="btnPreview">Preview</button>
+          <button id="btnClear" class="sec" type="button">Clear</button>
+          <button id="btnCopyDataUrl" class="copy" type="button">Copy Data URL</button>
+          <button id="btnDownload" class="sec" type="button" disabled>Download</button>
+        </div>
+
+        <div id="msg" class="hint" style="margin-top:8px"></div>
+      </div>
+
+      <!-- Right: Preview -->
+      <div class="card" style="padding:16px">
+        <div class="row" style="align-items:center;margin-bottom:8px">
+          <div class="pill"><span class="k">Fit:</span><span class="v" id="fitVal">Contain</span></div>
+          <div class="pill"><span class="k">Zoom:</span><span class="v" id="zoomVal">100%</span></div>
+          <div class="pill"><span class="k">Type:</span><span class="v" id="typeVal">—</span></div>
+          <div class="pill"><span class="k">Size:</span><span class="v" id="sizeVal">—</span></div>
+          <div class="pill"><span class="k">Dims:</span><span class="v" id="dimVal">—</span></div>
+        </div>
+
+        <div class="toolbar" style="margin-bottom:8px">
+          <button id="btnContain" class="sec" type="button">Contain</button>
+          <button id="btnCover" class="sec" type="button">Cover</button>
+          <button id="btnActual" class="sec" type="button">Actual Size</button>
+        </div>
+
+        <div id="preview" class="previewBox">
+          <span class="muted">এখানে প্রিভিউ দেখা যাবে…</span>
+        </div>
+        <div class="footer">নোট: বড় base64 হলে ব্রাউজার একটু সময় নিতে পারে।</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const el = (id)=>document.getElementById(id);
+  const b64 = el('b64'), mimeSel = el('mime'), fileName = el('filename');
+  const btnPreview = el('btnPreview'), btnClear = el('btnClear'), btnDownload = el('btnDownload');
+  const btnCopyDataUrl = el('btnCopyDataUrl');
+  const msg = el('msg');
+  const preview = el('preview');
+  const fitVal = el('fitVal'), zoomVal = el('zoomVal'), typeVal = el('typeVal'), sizeVal = el('sizeVal'), dimVal = el('dimVal');
+  const btnContain = el('btnContain'), btnCover = el('btnCover'), btnActual = el('btnActual');
+
+  let currentDataUrl = null;
+  let currentBlobSize = 0;
+
+  function humanSize(bytes){
+    if(bytes===0) return "0 B";
+    const k=1024, units=["B","KB","MB","GB"];
+    const i = Math.floor(Math.log(bytes)/Math.log(k));
+    return (bytes/Math.pow(k,i)).toFixed(i?2:0)+" "+units[i];
+  }
+
+  function makeDataUrl(input, selectedMime){
+    const raw = (input||"").trim();
+    if(!raw) throw new Error("কোনো ডাটা পাওয়া যায়নি।");
+
+    // If it's already a data URL, just return
+    if(/^data:[^;]+;base64,/.test(raw)) {
+      return raw;
+    }
+
+    // If it's likely plain base64, sanitize and wrap
+    const cleaned = raw.replace(/\s+/g,'');
+    // quick validation: base64 chars only
+    if(!/^[A-Za-z0-9+/=]+$/.test(cleaned)) {
+      throw new Error("বেস৬৪ স্ট্রিংটি সঠিক মনে হচ্ছে না (অচেনা ক্যারেক्टर)।");
+    }
+    const mime = (selectedMime && selectedMime!=="auto") ? selectedMime : "image/png";
+    return `data:${mime};base64,${cleaned}`;
+  }
+
+  function dataUrlToBlobSize(dataUrl){
+    try{
+      const base64 = dataUrl.split(',')[1] || "";
+      // decoded length in bytes
+      const padding = (base64.endsWith("==")?2:base64.endsWith("=")?1:0);
+      const bytes = Math.floor(base64.length * 3/4) - padding;
+      return bytes < 0 ? 0 : bytes;
+    }catch{ return 0; }
+  }
+
+  function showMessage(text, isError=false){
+    msg.textContent = text;
+    msg.className = isError ? "hint error" : "hint";
+  }
+
+  function clearPreview(){
+    preview.innerHTML = '<span class="muted">এখানে প্রিভিউ দেখা যাবে…</span>';
+    typeVal.textContent = "—";
+    sizeVal.textContent = "—";
+    dimVal.textContent = "—";
+    zoomVal.textContent = "100%";
+    currentDataUrl = null;
+    currentBlobSize = 0;
+    btnDownload.disabled = true;
+  }
+
+  async function doPreview(){
+    try{
+      showMessage("প্রসেস করা হচ্ছে…");
+      const url = makeDataUrl(b64.value, mimeSel.value);
+      currentDataUrl = url;
+      currentBlobSize = dataUrlToBlobSize(url);
+
+      // Build image
+      const img = new Image();
+      img.decoding = "async";
+      img.alt = "Base64 preview";
+      img.style.maxWidth = "100%";
+      img.style.height = "auto";
+
+      // Reset preview
+      preview.innerHTML = "";
+      preview.appendChild(img);
+
+      await new Promise((resolve,reject)=>{
+        img.onload = ()=>resolve();
+        img.onerror = ()=>reject(new Error("ছবি লোড করা যায়নি। MIME টাইপ বা ডেটা ভুল হতে পারে।"));
+        img.src = url;
+      });
+
+      // Update meta
+      const typeMatch = url.match(/^data:([^;]+);base64,/i);
+      typeVal.textContent = typeMatch ? typeMatch[1] : (mimeSel.value==="auto"?"(unknown)":"(assumed) "+mimeSel.value);
+      sizeVal.textContent = humanSize(currentBlobSize);
+      dimVal.textContent = `${img.naturalWidth} × ${img.naturalHeight}px`;
+      zoomVal.textContent = "Fit";
+
+      // Default fit = contain
+      preview.style.alignItems = "center";
+      preview.style.justifyContent = "center";
+      img.style.objectFit = "contain";
+      img.style.width = "100%";
+      img.style.height = "auto";
+
+      btnDownload.disabled = false;
+      showMessage("প্রিভিউ রেডি!");
+    }catch(e){
+      clearPreview();
+      showMessage(e.message || "অজানা ত্রুটি", true);
+    }
+  }
+
+  function setFit(mode){
+    const img = preview.querySelector('img');
+    if(!img) return;
+
+    if(mode==="contain"){
+      img.style.objectFit = "contain";
+      img.style.width = "100%";
+      img.style.height = "auto";
+      fitVal.textContent = "Contain";
+      zoomVal.textContent = "Fit";
+    }else if(mode==="cover"){
+      img.style.objectFit = "cover";
+      img.style.width = "100%";
+      img.style.height = "100%";
+      fitVal.textContent = "Cover";
+      zoomVal.textContent = "Fill";
+    }else{
+      // actual size
+      img.style.objectFit = "contain";
+      img.style.width = "auto";
+      img.style.height = "auto";
+      fitVal.textContent = "Actual";
+      zoomVal.textContent = "100%";
+    }
+  }
+
+  async function copyDataUrl(){
+    try{
+      const url = currentDataUrl || makeDataUrl(b64.value, mimeSel.value);
+      await navigator.clipboard.writeText(url);
+      showMessage("Data URL কপি হয়েছে!");
+    }catch(e){
+      showMessage("কপি করা যায়নি: " + (e.message||""), true);
+    }
+  }
+
+  async function downloadImage(){
+    if(!currentDataUrl){
+      showMessage("প্রিভিউ আগে তৈরি করুন।", true);
+      return;
+    }
+    const a = document.createElement('a');
+    const name = (fileName.value.trim() || 'preview').replace(/[\\\/:*?"<>|]+/g,'_');
+    // pick extension from mime
+    const type = (currentDataUrl.match(/^data:([^;]+);/)||[])[1]||"image/png";
+    const ext = ({
+      "image/png":"png","image/jpeg":"jpg","image/webp":"webp","image/gif":"gif",
+      "image/svg+xml":"svg","image/bmp":"bmp"
+    }[type]) || "png";
+    a.href = currentDataUrl;
+    a.download = name.endsWith('.'+ext) ? name : `${name}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  // events
+  btnPreview.addEventListener('click', doPreview);
+  btnClear.addEventListener('click', ()=>{ b64.value=""; clearPreview(); showMessage("ফিল্ড ক্লিয়ার করা হয়েছে."); });
+  btnCopyDataUrl.addEventListener('click', copyDataUrl);
+  btnDownload.addEventListener('click', downloadImage);
+
+  // Live preview on paste/typing with debounce
+  let t=null;
+  b64.addEventListener('input', ()=>{
+    clearTimeout(t);
+    t=setTimeout(()=>{ if(b64.value.trim()) doPreview(); else clearPreview(); }, 500);
+  });
+
+  // Fit buttons
+  btnContain.addEventListener('click', ()=>setFit('contain'));
+  btnCover.addEventListener('click', ()=>setFit('cover'));
+  btnActual.addEventListener('click', ()=>setFit('actual'));
+
+  // Example hint (click to insert)
+  const example = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAACXBIWXMAAAsSAAALEgHS3X78AAAAIUlEQVQYV2NkYGBgYGBg+M+AATYGBgYGJgYGBgYAAAYPgC4c0b0cQAAAABJRU5ErkJggg==';
+  if(!b64.value){ b64.placeholder += "\n\nউদাহরণ দেখতে এখানে ডাবল ট্যাপ/ডাবল ক্লিক করে লিখে দিন: (example)"; }
+  b64.addEventListener('dblclick', ()=>{ if(!b64.value.trim()){ b64.value = example; doPreview(); } });
+
+})();
+</script>
+</body>
+</html>
